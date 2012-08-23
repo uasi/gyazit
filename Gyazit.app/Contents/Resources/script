@@ -1,0 +1,186 @@
+#!/usr/bin/ruby
+
+require 'digest/sha1'
+require 'fileutils'
+require 'yaml'
+
+class Git
+  attr_accessor :response, :status
+
+  def self.parse_remote_url(remote_url)
+    # Hint:
+    # GitHub    HTTPS https://github.com/USER/REPO.git
+    # GitHub    Git   git://github.com/USER/REPO.git
+    # GitHub    SSH   git@github.com:USER/REPO.git
+    # BitBucket HTTPS https://USER@bitbucket.org/USER/REPO.git
+    # BitBucket SSH   git@bitbucket.org:USER/REPO.git
+    remote_url =~ %r!^(?:git|https)://(?:\w+@)?([^/]+)/(\w+)/(.+?)(?:\.git)?$! or
+      remote_url =~ %r!^(?:ssh://)?git@([^:]+):(\w+)/(.+?)(?:\.git)?$!
+    $~ ? {:host => $1, :user => $2, :repository => $3} : nil
+  end
+
+  def initialize(repository)
+    @repository = repository
+  end
+
+  # meth()  returns response text
+  # meth!() returns exit status
+  def method_missing(action, *args)
+    action.to_s =~ /^(.+)!$/
+    if $1 && respond_to?($1)
+      send($1, *args)
+      status
+    else
+      super.method_missing(action, *args)
+    end
+  end
+
+  def add(path)
+    run("add -- '#{path}'")
+  end
+
+  def commit(message)
+    run("commit -m '#{message.gsub(/'/, %q(\\'))}'")
+  end
+
+  def checkout_force(branch)
+    run("checkout --force #{branch}")
+  end
+
+  def remote_url(remote)
+    remote_verbose =~ /^#{remote}\s+(.+) \(fetch\)$/
+    $1
+  end
+
+  def remote_verbose
+    run("remote --verbose")
+  end
+
+  def pull_force(remote, branch)
+    run("pull --force #{remote} #{branch}")
+  end
+
+  def push(remote, branch)
+    run("push #{remote} #{branch}")
+  end
+
+  private
+  def run(command)
+    puts "Gyazit: git #{command}"
+    @status = $?.exitstatus
+    @response = `git --git-dir=#{@repository}/.git --work-tree=#{@repository} #{command}`
+  end
+end
+
+def dialog(message, opt={})
+  title = opt[:title] || 'Gyazit'
+  answer = opt[:answer]
+
+  [message, title, answer].compact.each do |s|
+    s.gsub!(/\n/, %q(\\\\n))
+    s.gsub!(/'/, %q(\\'))
+    s.gsub!(/"/, %q(\\"))
+  end
+
+  script = [
+    %Q(tell app "System Events" to display dialog "#{message}"),
+    title ? %Q(with title "#{title}") : nil,
+    answer ? %Q(default answer "#{answer}") : nil,
+  ].compact.join(' ')
+
+  response = `osascript -e '#{script}'`
+  $?.exitstatus == 0 ? response : nil
+end
+
+def die(message)
+  dialog(message, :title => 'Gyazit: Error')
+  abort
+end
+
+gyazitrc = ENV['HOME'] + '/.gyazitrc'
+
+config = YAML.load_file(gyazitrc) rescue nil
+
+unless config
+  message = <<-END.gsub(/^ +$/, '')
+    Create ~/.gyazitrc.
+
+    Note:
+
+    On capturing, the repository will be reset to
+    the specified branch and any uncommited
+    changes will be lost.
+
+    Remote should be hosted either at github.com
+    or at bitbucket.org.
+  END
+  source = <<-'END'.gsub(/^ +|\n$/, '')
+    repository: "/path/to/local/repository.git"
+    branch: master
+    remote: origin
+  END
+
+  text = dialog(message, :answer => source) or exit
+
+  begin
+    config_yaml = text.sub(/^text returned:(.*), button returned:OK$/m, '\1')
+    open(gyazitrc, 'w') {|f| f.write(config_yaml) }
+    config = YAML.load(config_yaml)
+  rescue
+    die('Failed to create ~/.gyazitrc.')
+  end
+end
+
+repository = config['repository'] or die('Repository is not set in ~/.gyazitrc.')
+repository.sub!(/^~/, ENV['HOME'])
+branch = config['branch'] || 'master'
+remote = config['remote'] || 'origin'
+
+git = Git.new(repository)
+
+tmpfile = "/tmp/gyazit_#{$$}.png"
+imgfile = ARGV[0]
+
+if imgfile && File.exist?(imgfile)
+  system "sips -s format png '#{imgfile}' --out '#{tmpfile}'"
+else
+  system "screencapture -i '#{tmpfile}'"
+  if File.exist?(tmpfile)
+    system "sips -d profile --deleteColorManagementProperties '#{tmpfile}'"
+  end
+end
+
+File.exist?(tmpfile) or exit
+
+digest = Digest::SHA1.hexdigest(open(tmpfile, 'rb').read)
+dstdir = File.join(repository, digest[0, 2])
+dstfile = File.join(dstdir, digest + '.png')
+FileUtils.mkdir_p(dstdir)
+
+File.exist?(dstdir) or die('Failed to save image.')
+
+# FIXME: better error handling needed
+begin
+  status = 0
+  status += git.checkout_force!(branch)
+  status += git.pull_force!(remote, branch)
+  FileUtils.mv(tmpfile, dstfile)
+  status += git.add!(dstfile)
+  status += git.commit!("Add #{File.basename(dstfile)}")
+  status += git.push!(remote, branch)
+  raise if status > 0
+rescue
+  die('Something is wrong with repository.')
+end
+
+rel_dstfile = File.join(digest[0, 2], digest + '.png')
+info = Git.parse_remote_url(git.remote_url(remote))
+if info == nil
+  die('Remote is neither github.com nor bitbucket.org; URL is not copied.')
+elsif info[:host] == 'github.com'
+  url = "https://raw.github.com/#{info[:user]}/#{info[:repository]}/#{branch}/#{rel_dstfile}"
+  system "open '#{url}'"
+elsif info[:host] == 'bitbucket.org'
+  url = "https://bitbucket.org/#{info[:user]}/#{info[:repository]}/raw/#{branch}/#{rel_dstfile}"
+  system "open '#{url}'"
+end
