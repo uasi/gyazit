@@ -179,8 +179,10 @@ if info == nil
   die('Remote is neither github.com nor bitbucket.org; URL is not copied.')
 elsif info[:host] == 'github.com'
   url = "https://raw.github.com/#{info[:user]}/#{info[:repository]}/#{branch}/#{rel_dstfile}"
+  system "echo '#{url}' | pbcopy"
   system "open '#{url}'"
 elsif info[:host] == 'bitbucket.org'
   url = "https://bitbucket.org/#{info[:user]}/#{info[:repository]}/raw/#{branch}/#{rel_dstfile}"
+  system "echo '#{url}' | pbcopy"
   system "open '#{url}'"
 end
