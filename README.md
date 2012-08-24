@@ -35,3 +35,7 @@ Example
 https://bitbucket.org/uasi/p/raw/master/94/94df514cfec4bdafa96f837fe1394137c50bae19.png
 
 ![Hello, Gyazit!](https://bitbucket.org/uasi/p/raw/master/94/94df514cfec4bdafa96f837fe1394137c50bae19.png)
+
+Download
+--------
+[Download as zip](https://github.com/uasi/gyazit/zipball/master)
