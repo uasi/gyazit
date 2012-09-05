@@ -14,7 +14,7 @@ class Git
     # GitHub    SSH   git@github.com:USER/REPO.git
     # BitBucket HTTPS https://USER@bitbucket.org/USER/REPO.git
     # BitBucket SSH   git@bitbucket.org:USER/REPO.git
-    remote_url =~ %r!^(?:git|https)://(?:\w+@)?([^/]+)/(\w+)/(.+?)(?:\.git)?$! or
+    remote_url =~ %r!^(?:git|https)://(?:\w+@)?([^/]+)/([\w\-]+)/(.+?)(?:\.git)?$! or
       remote_url =~ %r!^(?:ssh://)?git@([^:]+):([\w\-]+)/(.+?)(?:\.git)?$!
     $~ ? {:host => $1, :user => $2, :repository => $3} : nil
   end
