@@ -183,6 +183,6 @@ elsif info[:host] == 'github.com'
   system "open '#{url}'"
 elsif info[:host] == 'bitbucket.org'
   url = "https://bitbucket.org/#{info[:user]}/#{info[:repository]}/raw/#{branch}/#{rel_dstfile}"
-  system "echo '#{url}' | pbcopy"
+  system "echo -n '#{url}' | pbcopy"
   system "open '#{url}'"
 end
