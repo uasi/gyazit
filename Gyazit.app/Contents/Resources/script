@@ -159,18 +159,15 @@ FileUtils.mkdir_p(dstdir)
 
 File.exist?(dstdir) or die('Failed to save image.')
 
-# FIXME: better error handling needed
 begin
-  status = 0
-  status += git.checkout_force!(branch)
-  status += git.pull_force!(remote, branch)
-  FileUtils.mv(tmpfile, dstfile)
-  status += git.add!(dstfile)
-  status += git.commit!("Add #{File.basename(dstfile)}")
-  status += git.push!(remote, branch)
-  raise if status > 0
+  git.checkout_force!(branch) == 0     or raise "Failed to force-checkout #{branch}."
+  git.pull_force!(remote, branch) == 0 or raise "Failed to force-pull remote branch #{branch}."
+  FileUtils.mv(tmpfile, dstfile) == 0  or raise "Failed to move #{tmpfile} to #{dstfile}."
+  git.add!(dstfile) == 0               or raise "Failed to add #{dstfile}."
+  git.commit!("Add #{File.basename(dstfile)}") == 0 or raise "Failed to commit."
+  git.push!(remote, branch) == 0       or raise "Failed to push."
 rescue
-  die('Something is wrong with repository.')
+  die($!.to_s)
 end
 
 rel_dstfile = File.join(digest[0, 2], digest + '.png')
