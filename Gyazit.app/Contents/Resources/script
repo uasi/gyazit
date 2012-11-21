@@ -57,7 +57,7 @@ class Git
   end
 
   def pull_force(remote, branch)
-    run("pull --force #{remote} #{branch}")
+    run("pull --force #{remote} #{branch}:#{branch}")
   end
 
   def push(remote, branch)
